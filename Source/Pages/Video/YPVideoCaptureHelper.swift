@@ -17,6 +17,7 @@ class YPVideoCaptureHelper: NSObject {
     }
     public var didCaptureVideo: ((URL) -> Void)?
     public var videoRecordingProgress: ((Float, TimeInterval) -> Void)?
+    public weak var autofocusDelegate: YPAutofocusManagerDelegate?
     
     private let session = AVCaptureSession()
     private var timer = Timer()
@@ -30,6 +31,7 @@ class YPVideoCaptureHelper: NSObject {
     private var previewView: UIView!
     private var motionManager = CMMotionManager()
     private var initVideoZoomFactor: CGFloat = 1.0
+    internal var autofocusManager: YPAutofocusManager?
     
     // MARK: - Init
     
@@ -100,6 +102,17 @@ class YPVideoCaptureHelper: NSObject {
                strongSelf.session.canAddInput(audioInput) {
                 strongSelf.session.addInput(audioInput)
             }
+            
+            // Reconfigure autofocus for new device
+            if let device = strongSelf.videoInput?.device {
+                strongSelf.autofocusManager = YPAutofocusManager(device: device, configuration: YPConfig.camera.autofocus)
+                strongSelf.autofocusManager?.delegate = strongSelf.autofocusDelegate
+                do {
+                    try strongSelf.autofocusManager?.configure()
+                } catch {
+                    ypLog("Failed to configure video autofocus after camera flip: \(error)")
+                }
+            }
 
             strongSelf.session.commitConfiguration()
 
@@ -112,7 +125,19 @@ class YPVideoCaptureHelper: NSObject {
     // MARK: - Focus
     
     public func focus(onPoint point: CGPoint) {
-        if let device = videoInput?.device {
+        guard let device = videoInput?.device else { return }
+        
+        // Use autofocus manager if available and tap-to-focus is enabled
+        if let manager = autofocusManager {
+            do {
+                try manager.focusAt(point: point, in: previewView)
+            } catch {
+                ypLog("Video autofocus error: \(error)")
+                // Fallback to legacy focus
+                setFocusPointOnDevice(device: device, point: point)
+            }
+        } else {
+            // Fallback to legacy focus implementation
             setFocusPointOnDevice(device: device, point: point)
         }
     }
@@ -237,6 +262,16 @@ class YPVideoCaptureHelper: NSObject {
                 session.addOutput(videoOutput)
             }
             session.sessionPreset = .high
+            
+            // Setup autofocus manager
+            let device = videoInput.device
+            autofocusManager = YPAutofocusManager(device: device, configuration: YPConfig.camera.autofocus)
+            autofocusManager?.delegate = autofocusDelegate
+            do {
+                try autofocusManager?.configure()
+            } catch {
+                ypLog("Failed to configure video autofocus: \(error)")
+            }
         }
         session.commitConfiguration()
         isCaptureSessionSetup = true

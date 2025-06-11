@@ -146,6 +146,24 @@ class ExampleViewController: UIViewController {
         // overlayView.alpha = 0.3
         // config.overlayView = overlayView
 
+        /* ✨ NEW: Autofocus Configuration Testing ✨ */
+        // Test different autofocus modes
+        config.camera.autofocus.focusMode = .continuousAutoFocus // or .autoFocus, .locked
+        config.camera.autofocus.smoothAutoFocusEnabled = true
+        config.camera.autofocus.tapToFocusEnabled = true
+        config.camera.autofocus.tapToFocusResetDelay = 2.0
+        
+        // Test focus range restrictions (iOS 13+)
+        if #available(iOS 13.0, *) {
+            config.camera.autofocus.focusRange = .none // or .near for macro, .far for distant subjects
+        }
+        
+        print("🔍 Autofocus Configuration:")
+        print("  Focus Mode: \(config.camera.autofocus.focusMode)")
+        print("  Smooth Autofocus: \(config.camera.autofocus.smoothAutoFocusEnabled)")
+        print("  Tap to Focus: \(config.camera.autofocus.tapToFocusEnabled)")
+        print("  Reset Delay: \(config.camera.autofocus.tapToFocusResetDelay)s")
+
         /* Customize wordings */
         config.wordings.libraryTitle = "Gallery"
 

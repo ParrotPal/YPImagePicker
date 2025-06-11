@@ -32,6 +32,7 @@ internal final class YPPhotoCaptureHelper: NSObject {
     private var videoLayer: AVCaptureVideoPreviewLayer!
     private var block: ((Data) -> Void)?
     private var initVideoZoomFactor: CGFloat = 1.0
+    internal var autofocusManager: YPAutofocusManager?
 }
 
 // MARK: - Public
@@ -108,7 +109,19 @@ extension YPPhotoCaptureHelper {
             return
         }
         
-        setFocusPointOnDevice(device: device, point: point)
+        // Use autofocus manager if available and tap-to-focus is enabled
+        if let manager = autofocusManager {
+            do {
+                try manager.focusAt(point: point, in: previewView)
+            } catch {
+                ypLog("Autofocus error: \(error)")
+                // Fallback to legacy focus
+                setFocusPointOnDevice(device: device, point: point)
+            }
+        } else {
+            // Fallback to legacy focus implementation
+            setFocusPointOnDevice(device: device, point: point)
+        }
     }
 }
 
@@ -191,6 +204,17 @@ private extension YPPhotoCaptureHelper {
                 photoOutput.setPreparedPhotoSettingsArray([photoCaptureSettings()], completionHandler: nil)
             }
         }
+        
+        // Setup autofocus manager
+        if let device = self.device {
+            autofocusManager = YPAutofocusManager(device: device, configuration: YPConfig.camera.autofocus)
+            do {
+                try autofocusManager?.configure()
+            } catch {
+                ypLog("Failed to configure autofocus: \(error)")
+            }
+        }
+        
         session.commitConfiguration()
         isCaptureSessionSetup = true
     }
@@ -240,6 +264,16 @@ private extension YPPhotoCaptureHelper {
         guard let deviceInput = deviceInput else { return }
         if session.canAddInput(deviceInput) {
             session.addInput(deviceInput)
+        }
+        
+        // Reconfigure autofocus for new device
+        if let device = self.device {
+            autofocusManager = YPAutofocusManager(device: device, configuration: YPConfig.camera.autofocus)
+            do {
+                try autofocusManager?.configure()
+            } catch {
+                ypLog("Failed to configure autofocus after camera flip: \(error)")
+            }
         }
     }
     

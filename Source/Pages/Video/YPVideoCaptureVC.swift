@@ -8,7 +8,7 @@
 
 import UIKit
 
-internal class YPVideoCaptureVC: UIViewController, YPPermissionCheckable {
+internal class YPVideoCaptureVC: UIViewController, YPPermissionCheckable, YPAutofocusManagerDelegate {
     var didCaptureVideo: ((URL) -> Void)?
     
     private let videoHelper = YPVideoCaptureHelper()
@@ -54,6 +54,9 @@ internal class YPVideoCaptureVC: UIViewController, YPPermissionCheckable {
     }
 
     func start() {
+        // Set autofocus delegate
+        videoHelper.autofocusDelegate = self
+        
         self.videoHelper.start(previewView: v.previewViewContainer,
                                withVideoRecordingLimit: YPConfig.video.recordingTimeLimit) { [weak self] in
             DispatchQueue.main.async {
@@ -238,5 +241,59 @@ internal class YPVideoCaptureVC: UIViewController, YPPermissionCheckable {
         } else {
             return .noFlash
         }
+    }
+}
+
+// MARK: - YPAutofocusManagerDelegate
+
+extension YPVideoCaptureVC {
+    func autofocusDidBeginFocusing(at point: CGPoint) {
+        // Enhanced focus UI with the existing focus view for video
+        v.focusView.center = point
+        YPHelper.configureFocusView(v.focusView)
+        v.addSubview(v.focusView)
+        YPHelper.animateFocusView(v.focusView)
+    }
+    
+    func autofocusDidBeginAdjusting() {
+        // Optional: Show loading state or change focus indicator during video capture
+        DispatchQueue.main.async {
+            if self.v.focusView.superview != nil {
+                self.v.focusView.layer.borderColor = UIColor.yellow.cgColor
+            }
+        }
+    }
+    
+    func autofocusDidFinishAdjusting(quality: YPFocusQuality) {
+        DispatchQueue.main.async {
+            switch quality {
+            case .good:
+                // Show successful focus with green indicator
+                if self.v.focusView.superview != nil {
+                    self.v.focusView.layer.borderColor = UIColor.green.cgColor
+                }
+            case .tooClose, .tooFar, .failed:
+                // Show focus failure with red indicator
+                if self.v.focusView.superview != nil {
+                    self.v.focusView.layer.borderColor = UIColor.red.cgColor
+                }
+            }
+            
+            // Hide focus indicator after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                UIView.animate(withDuration: 0.3) {
+                    self.v.focusView.alpha = 0.0
+                } completion: { _ in
+                    self.v.focusView.removeFromSuperview()
+                    self.v.focusView.alpha = 1.0
+                    self.v.focusView.layer.borderColor = UIColor.systemYellow.cgColor
+                }
+            }
+        }
+    }
+    
+    func autofocusDidEncounterError(_ error: Error) {
+        ypLog("Autofocus error in video capture: \(error)")
+        // Optionally show user-friendly error message or fallback behavior
     }
 }

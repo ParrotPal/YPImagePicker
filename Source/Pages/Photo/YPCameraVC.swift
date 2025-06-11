@@ -10,7 +10,7 @@ import UIKit
 import AVFoundation
 import Photos
 
-internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, YPPermissionCheckable {
+internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, YPPermissionCheckable, YPAutofocusManagerDelegate {
     var didCapturePhoto: ((UIImage) -> Void)?
     let v: YPCameraView!
 
@@ -73,6 +73,10 @@ internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, 
                 DispatchQueue.main.async {
                     self?.isInited = true
                     self?.updateFlashButtonUI()
+                    // Set autofocus delegate for enhanced focus monitoring
+                    if let autofocusManager = self?.photoCapture.autofocusManager {
+                        autofocusManager.delegate = self
+                    }
                 }
             })
         }
@@ -215,5 +219,60 @@ internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, 
             self.v.flashButton.setImage(flashImage, for: .normal)
             self.v.flashButton.isHidden = !self.photoCapture.hasFlash
         }
+    }
+}
+
+// MARK: - YPAutofocusManagerDelegate
+
+extension YPCameraVC {
+    func autofocusDidBeginFocusing(at point: CGPoint) {
+        // Enhanced focus UI with the existing focus view
+        v.focusView.center = point
+        YPHelper.configureFocusView(v.focusView)
+        v.addSubview(v.focusView)
+        YPHelper.animateFocusView(v.focusView)
+    }
+    
+    func autofocusDidBeginAdjusting() {
+        // Optional: Show loading state or change focus indicator
+        DispatchQueue.main.async {
+            // Could add a subtle animation or color change to indicate focusing is in progress
+            if self.v.focusView.superview != nil {
+                self.v.focusView.layer.borderColor = UIColor.yellow.cgColor
+            }
+        }
+    }
+    
+    func autofocusDidFinishAdjusting(quality: YPFocusQuality) {
+        DispatchQueue.main.async {
+            switch quality {
+            case .good:
+                // Show successful focus with green indicator
+                if self.v.focusView.superview != nil {
+                    self.v.focusView.layer.borderColor = UIColor.green.cgColor
+                }
+            case .tooClose, .tooFar, .failed:
+                // Show focus failure with red indicator
+                if self.v.focusView.superview != nil {
+                    self.v.focusView.layer.borderColor = UIColor.red.cgColor
+                }
+            }
+            
+            // Hide focus indicator after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                UIView.animate(withDuration: 0.3) {
+                    self.v.focusView.alpha = 0.0
+                } completion: { _ in
+                    self.v.focusView.removeFromSuperview()
+                    self.v.focusView.alpha = 1.0
+                    self.v.focusView.layer.borderColor = UIColor.systemYellow.cgColor
+                }
+            }
+        }
+    }
+    
+    func autofocusDidEncounterError(_ error: Error) {
+        ypLog("Autofocus error in camera: \(error)")
+        // Optionally show user-friendly error message or fallback behavior
     }
 }

@@ -124,6 +124,9 @@ public struct YPImagePickerConfiguration {
     /// Controls the camera shutter sound. If set to true, the camera shutter sound will be disabled. Defaults to false.
     public var silentMode = false
     
+    /// Camera autofocus configuration
+    public var camera = YPConfigCamera()
+    
     /// List of default filters which will be added on the filter screen
     public var filters: [YPFilter] = [
         YPFilter(name: "Normal", applier: nil),
@@ -280,4 +283,66 @@ public enum YPlibraryMediaType {
     case photo
     case video
     case photoAndVideo
+}
+
+// MARK: - Camera Configuration
+
+/// Encapsulates camera autofocus specific settings.
+public struct YPConfigCamera {
+    /// Autofocus configuration for camera
+    public var autofocus = YPAutofocusConfiguration()
+}
+
+/// Defines camera focus mode options
+public enum YPCameraFocusMode {
+    case locked          // Manual focus, no automatic adjustment
+    case autoFocus      // Single-shot autofocus (focus once when triggered)
+    case continuousAutoFocus // Continuous autofocus tracking
+    
+    var avFocusMode: AVCaptureDevice.FocusMode {
+        switch self {
+        case .locked: return .locked
+        case .autoFocus: return .autoFocus
+        case .continuousAutoFocus: return .continuousAutoFocus
+        }
+    }
+}
+
+/// Defines camera focus range restrictions (iOS 13.0+)
+public enum YPCameraFocusRange {
+    case none    // No restriction (full range)
+    case near    // Optimized for close-up subjects (macro mode)
+    case far     // Optimized for distant subjects
+    
+    var avFocusRange: AVCaptureDevice.AutoFocusRangeRestriction {
+        switch self {
+        case .none: return .none
+        case .near: return .near
+        case .far: return .far
+        }
+    }
+}
+
+/// Autofocus configuration structure
+public struct YPAutofocusConfiguration {
+    /// Primary focus mode. Default is .continuousAutoFocus
+    public var focusMode: YPCameraFocusMode = .continuousAutoFocus
+    
+    /// Focus range restriction for specialized photography (iOS 13.0+). Default is .none
+    public var focusRange: YPCameraFocusRange = .none
+    
+    /// Enable smooth autofocus transitions. Default is true
+    public var smoothAutoFocusEnabled: Bool = true
+    
+    /// Enable tap-to-focus functionality. Default is true
+    public var tapToFocusEnabled: Bool = true
+    
+    /// Custom lens position for manual focus (0.0 to 1.0). Default is nil (automatic)
+    public var manualLensPosition: Float? = nil
+    
+    /// Minimum focus distance override (in millimeters). Default is nil (use device default)
+    public var minimumFocusDistance: Float? = nil
+    
+    /// Return to continuous autofocus after tap-to-focus delay (in seconds). Default is 2.0
+    public var tapToFocusResetDelay: TimeInterval = 2.0
 }
