@@ -116,13 +116,13 @@ internal final class YPAutofocusManager {
     
     /// Get current focus distance estimation
     var estimatedFocusDistance: Float? {
-        guard device.minimumFocusDistance > 0.0 else { return nil }
-        
+        guard device.minimumFocusDistance > 0 else { return nil }
+
         let lensPosition = device.lensPosition
         let minDistance = device.minimumFocusDistance
         
         // Simplified calculation - actual implementation would be more complex
-        return minDistance / (1.0 - lensPosition)
+        return Float(minDistance) / (1.0 - lensPosition)
     }
     
     /// Check if camera is at minimum focus distance
