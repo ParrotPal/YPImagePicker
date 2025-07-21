@@ -159,7 +159,7 @@ internal class YPCameraView: UIView, UIGestureRecognizerDelegate {
             button.layer.cornerRadius = cornerRadius
             button.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .medium)
             button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
-            button.setTitle("Auto: ON", for: .normal)
+            button.setTitle("Auto Focus: ON", for: .normal)
             button.setTitleColor(.green, for: .normal)
             button.layer.borderColor = UIColor.green.cgColor
             button.layer.borderWidth = 1
@@ -176,11 +176,11 @@ internal class YPCameraView: UIView, UIGestureRecognizerDelegate {
     /// Update the auto-switch button state
     func updateAutoSwitchButton(isEnabled: Bool, isVisible: Bool) {
         if isEnabled {
-            autoSwitchButton.setTitle("Auto: ON", for: .normal)
+            autoSwitchButton.setTitle("Auto Focus: ON", for: .normal)
             autoSwitchButton.setTitleColor(.green, for: .normal)
             autoSwitchButton.layer.borderColor = UIColor.green.cgColor
         } else {
-            autoSwitchButton.setTitle("Auto: OFF", for: .normal)
+            autoSwitchButton.setTitle("Auto Focus: ON", for: .normal)
             autoSwitchButton.setTitleColor(.white, for: .normal)
             autoSwitchButton.layer.borderColor = UIColor.white.cgColor
         }

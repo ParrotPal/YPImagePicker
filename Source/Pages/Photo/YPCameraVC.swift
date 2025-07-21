@@ -281,7 +281,7 @@ internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, 
             autofocusManager.isAutoSwitchEnabled.toggle()
             
             // Save the new state to UserDefaults
-            YPConfig.camera.autoSwitchEnabled = autofocusManager.isAutoSwitchEnabled
+            UserDefaults.ypCameraAutoSwitchEnabled = autofocusManager.isAutoSwitchEnabled
             
             // Update button appearance
             updateAutoSwitchButtonUI(isEnabled: autofocusManager.isAutoSwitchEnabled)
