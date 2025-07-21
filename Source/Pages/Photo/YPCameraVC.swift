@@ -38,6 +38,7 @@ internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, 
     
     deinit {
         YPDeviceOrientationHelper.shared.stopDeviceOrientationNotifier()
+        NotificationCenter.default.removeObserver(self)
     }
     
     override internal func viewDidLoad() {
@@ -48,9 +49,15 @@ internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, 
         v.shotButton.addTarget(self, action: #selector(shotButtonTapped), for: .touchUpInside)
         v.flipButton.addTarget(self, action: #selector(flipButtonTapped), for: .touchUpInside)
         
-        // Prevent flip and shot button clicked at the same time
+        // Camera mode switching buttons
+        v.cameraModeButton.addTarget(self, action: #selector(cameraModeButtonTapped), for: .touchUpInside)
+        v.autoSwitchButton.addTarget(self, action: #selector(autoSwitchButtonTapped), for: .touchUpInside)
+        
+        // Prevent multiple buttons clicked at the same time
         v.shotButton.isExclusiveTouch = true
         v.flipButton.isExclusiveTouch = true
+        v.cameraModeButton.isExclusiveTouch = true
+        v.autoSwitchButton.isExclusiveTouch = true
         
         // Focus
         let tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.focusTapped(_:)))
@@ -61,6 +68,21 @@ internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, 
         let pinchRecongizer = UIPinchGestureRecognizer(target: self, action: #selector(self.pinch(_:)))
         pinchRecongizer.delegate = self
         v.previewViewContainer.addGestureRecognizer(pinchRecongizer)
+        
+        // Listen for camera mode switching notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(cameraManualSwitched),
+            name: NSNotification.Name("CameraModeManualSwitched"),
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(cameraAutoSwitched),
+            name: NSNotification.Name("CameraModeAutoSwitched"),
+            object: nil
+        )
     }
     
     func start() {
@@ -73,9 +95,13 @@ internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, 
                 DispatchQueue.main.async {
                     self?.isInited = true
                     self?.updateFlashButtonUI()
+                    self?.updateCameraModeButtonsUI()
                     // Set autofocus delegate for enhanced focus monitoring
                     if let autofocusManager = self?.photoCapture.autofocusManager {
                         autofocusManager.delegate = self
+                        // Configure auto-switch based on persisted user preference
+                        autofocusManager.isAutoSwitchEnabled = YPConfig.camera.autoSwitchEnabled
+                        ypLog("Camera auto-switch initialized to: \(autofocusManager.isAutoSwitchEnabled)")
                     }
                 }
             })
@@ -220,6 +246,101 @@ internal final class YPCameraVC: UIViewController, UIGestureRecognizerDelegate, 
             self.v.flashButton.isHidden = !self.photoCapture.hasFlash
         }
     }
+    
+    // MARK: - Camera Mode Switching
+    
+    @objc
+    func cameraModeButtonTapped() {
+        guard YPConfig.camera.allowsCameraModeSwitch else { return }
+        
+        // Switch camera mode
+        photoCapture.switchCameraMode()
+        
+        // Update UI immediately (will be confirmed by notification)
+        updateCameraModeButtonsUI()
+        
+        // Enable manual mode temporarily
+        photoCapture.autofocusManager?.setManualMode(true)
+        
+        // Add animation
+        UIView.animate(withDuration: 0.2) {
+            self.v.cameraModeButton.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.2) {
+                self.v.cameraModeButton.transform = .identity
+            }
+        }
+    }
+    
+    @objc
+    func autoSwitchButtonTapped() {
+        guard YPConfig.camera.allowsCameraModeSwitch else { return }
+        
+        // Toggle auto-switch mode
+        if let autofocusManager = photoCapture.autofocusManager {
+            autofocusManager.isAutoSwitchEnabled.toggle()
+            
+            // Save the new state to UserDefaults
+            YPConfig.camera.autoSwitchEnabled = autofocusManager.isAutoSwitchEnabled
+            
+            // Update button appearance
+            updateAutoSwitchButtonUI(isEnabled: autofocusManager.isAutoSwitchEnabled)
+            
+            ypLog("Camera auto-switch toggled to: \(autofocusManager.isAutoSwitchEnabled)")
+        }
+        
+        // Add animation
+        UIView.animate(withDuration: 0.2) {
+            self.v.autoSwitchButton.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.2) {
+                self.v.autoSwitchButton.transform = .identity
+            }
+        }
+    }
+    
+    @objc
+    func cameraManualSwitched() {
+        // Update camera mode button title when manually switched
+        updateCameraModeButtonsUI()
+        
+        // Add a subtle flash animation to indicate switch
+        UIView.animate(withDuration: 0.2) {
+            self.v.cameraModeButton.alpha = 0.5
+        } completion: { _ in
+            UIView.animate(withDuration: 0.2) {
+                self.v.cameraModeButton.alpha = 1.0
+            }
+        }
+    }
+    
+    @objc
+    func cameraAutoSwitched() {
+        // Update camera mode button title when auto-switched
+        updateCameraModeButtonsUI()
+        
+        // Add a subtle flash animation to indicate automatic switch
+        UIView.animate(withDuration: 0.2) {
+            self.v.cameraModeButton.alpha = 0.3
+        } completion: { _ in
+            UIView.animate(withDuration: 0.2) {
+                self.v.cameraModeButton.alpha = 1.0
+            }
+        }
+    }
+    
+    func updateCameraModeButtonsUI() {
+        let hasMultipleModes = photoCapture.hasMultipleCameraModes
+        let modeName = photoCapture.currentCameraModeName
+        let isAutoEnabled = photoCapture.autofocusManager?.isAutoSwitchEnabled ?? false
+        
+        v.updateCameraModeButton(title: modeName, isVisible: hasMultipleModes && YPConfig.camera.allowsCameraModeSwitch)
+        v.updateAutoSwitchButton(isEnabled: isAutoEnabled, isVisible: hasMultipleModes && YPConfig.camera.allowsCameraModeSwitch)
+    }
+    
+    private func updateAutoSwitchButtonUI(isEnabled: Bool) {
+        v.updateAutoSwitchButton(isEnabled: isEnabled, isVisible: photoCapture.hasMultipleCameraModes && YPConfig.camera.allowsCameraModeSwitch)
+    }
 }
 
 // MARK: - YPAutofocusManagerDelegate
@@ -274,5 +395,35 @@ extension YPCameraVC {
     func autofocusDidEncounterError(_ error: Error) {
         ypLog("Autofocus error in camera: \(error)")
         // Optionally show user-friendly error message or fallback behavior
+    }
+    
+    func autofocusShouldSwitchToUltraWide() {
+        guard YPConfig.camera.allowsCameraModeSwitch else { return }
+        guard photoCapture.hasMultipleCameraModes else { return }
+        
+        // Try to find ultra-wide camera and switch to it
+        if let autofocusManager = photoCapture.autofocusManager {
+            // Check if we're not already on ultra-wide
+            let currentModeName = photoCapture.currentCameraModeName
+            if !currentModeName.contains("Wide") {
+                // Perform auto-switch to ultra-wide
+                photoCapture.autoSwitchToUltraWideIfAvailable()
+            }
+        }
+    }
+    
+    func autofocusShouldSwitchBackToStandard() {
+        guard YPConfig.camera.allowsCameraModeSwitch else { return }
+        guard photoCapture.hasMultipleCameraModes else { return }
+        
+        // Try to switch back to standard camera
+        if let autofocusManager = photoCapture.autofocusManager {
+            // Check if we're currently on ultra-wide
+            let currentModeName = photoCapture.currentCameraModeName
+            if currentModeName.contains("Wide") && !currentModeName.contains("Standard") {
+                // Perform auto-switch back to standard
+                photoCapture.autoSwitchToStandardIfAvailable()
+            }
+        }
     }
 }

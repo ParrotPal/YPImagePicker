@@ -291,6 +291,25 @@ public enum YPlibraryMediaType {
 public struct YPConfigCamera {
     /// Autofocus configuration for camera
     public var autofocus = YPAutofocusConfiguration()
+    
+    /// Enable camera mode switching (Wide, Ultra-Wide, Telephoto). Default is true
+    public var allowsCameraModeSwitch: Bool = true
+    
+    /// Enable automatic camera switching based on focus distance. Reads from UserDefaults and defaults to true
+    public var autoSwitchEnabled: Bool {
+        get {
+            return UserDefaults.ypCameraAutoSwitchEnabled
+        }
+        set {
+            UserDefaults.ypCameraAutoSwitchEnabled = newValue
+        }
+    }
+    
+    /// Show camera mode button in UI when multiple cameras are available. Default is true
+    public var showCameraModeButton: Bool = true
+    
+    /// Show auto-switch toggle button in UI. Default is true
+    public var showAutoSwitchButton: Bool = true
 }
 
 /// Defines camera focus mode options
@@ -345,4 +364,34 @@ public struct YPAutofocusConfiguration {
     
     /// Return to continuous autofocus after tap-to-focus delay (in seconds). Default is 2.0
     public var tapToFocusResetDelay: TimeInterval = 2.0
+}
+
+// MARK: - UserDefaults Extensions
+
+extension UserDefaults {
+    private static let cameraAutoSwitchKey = "cameraAutoSwitchEnabled"
+    
+    /// Persistent storage for camera auto-switch preference
+    var ypCameraAutoSwitchEnabled: Bool {
+        get {
+            // Return true by default if no value has been set
+            if object(forKey: UserDefaults.cameraAutoSwitchKey) == nil {
+                return true
+            }
+            return bool(forKey: UserDefaults.cameraAutoSwitchKey)
+        }
+        set {
+            set(newValue, forKey: UserDefaults.cameraAutoSwitchKey)
+        }
+    }
+    
+    /// Static accessor for convenience
+    static var ypCameraAutoSwitchEnabled: Bool {
+        get {
+            return UserDefaults.standard.ypCameraAutoSwitchEnabled
+        }
+        set {
+            UserDefaults.standard.ypCameraAutoSwitchEnabled = newValue
+        }
+    }
 }

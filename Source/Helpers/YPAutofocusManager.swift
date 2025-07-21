@@ -23,6 +23,14 @@ public protocol YPAutofocusManagerDelegate: AnyObject {
     func autofocusDidBeginAdjusting()
     func autofocusDidFinishAdjusting(quality: YPFocusQuality)
     func autofocusDidEncounterError(_ error: Error)
+    func autofocusShouldSwitchToUltraWide()
+    func autofocusShouldSwitchBackToStandard()
+}
+
+/// Extension to provide default implementations
+extension YPAutofocusManagerDelegate {
+    func autofocusShouldSwitchToUltraWide() {}
+    func autofocusShouldSwitchBackToStandard() {}
 }
 
 /// Core autofocus manager for handling advanced focus operations
@@ -31,6 +39,19 @@ internal final class YPAutofocusManager {
     private let configuration: YPAutofocusConfiguration
     private var focusObservation: NSKeyValueObservation?
     private var resetTimer: Timer?
+    private var focusMonitorTimer: Timer?
+    
+    // Auto-switching properties
+    private var isManualModeActive: Bool = false
+    var isAutoSwitchEnabled: Bool = UserDefaults.ypCameraAutoSwitchEnabled {
+        didSet {
+            if isAutoSwitchEnabled {
+                startFocusMonitoring()
+            } else {
+                stopFocusMonitoring()
+            }
+        }
+    }
     
     weak var delegate: YPAutofocusManagerDelegate?
     
@@ -43,6 +64,7 @@ internal final class YPAutofocusManager {
     deinit {
         focusObservation?.invalidate()
         resetTimer?.invalidate()
+        focusMonitorTimer?.invalidate()
     }
     
     // MARK: - Public Methods
@@ -188,6 +210,67 @@ internal final class YPAutofocusManager {
             x: point.x / view.bounds.width,
             y: point.y / view.bounds.height
         )
+    }
+    
+    // MARK: - Auto Camera Switching
+    
+    /// Enable manual mode temporarily to prevent auto-switching
+    func setManualMode(_ active: Bool) {
+        isManualModeActive = active
+        
+        if active {
+            // Reset manual mode after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.isManualModeActive = false
+            }
+        }
+    }
+    
+    private func startFocusMonitoring() {
+        stopFocusMonitoring()
+        
+        // Create timer on main thread
+        DispatchQueue.main.async { [weak self] in
+            self?.focusMonitorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+                self?.checkFocusAndSwitchIfNeeded()
+            }
+            // Add to common run loop mode to ensure it runs even during UI interactions
+            if let timer = self?.focusMonitorTimer {
+                RunLoop.current.add(timer, forMode: .common)
+            }
+            ypLog("Camera auto-switch focus monitoring started")
+        }
+    }
+    
+    private func stopFocusMonitoring() {
+        DispatchQueue.main.async { [weak self] in
+            self?.focusMonitorTimer?.invalidate()
+            self?.focusMonitorTimer = nil
+            ypLog("Camera auto-switch focus monitoring stopped")
+        }
+    }
+    
+    private func checkFocusAndSwitchIfNeeded() {
+        guard isAutoSwitchEnabled,
+              !isManualModeActive else {
+            return
+        }
+        
+        let lensPosition = device.lensPosition
+        let isAdjusting = device.isAdjustingFocus
+        
+        // Check if the device is having trouble focusing (using tested threshold from main project)
+        let isStruggling = !device.isAdjustingFocus && device.lensPosition < 0.2
+        
+        if isStruggling {
+            // Suggest switching to ultra-wide camera for better close-up focus
+            ypLog("Auto-switch suggesting ultra-wide for better close focus (lens: \(device.lensPosition))")
+            delegate?.autofocusShouldSwitchToUltraWide()
+        } else if device.lensPosition > 0.9 {
+            // Object is far, suggest switching back to standard
+            ypLog("Auto-switch suggesting standard camera (lens: \(device.lensPosition))")
+            delegate?.autofocusShouldSwitchBackToStandard()
+        }
     }
 }
 
